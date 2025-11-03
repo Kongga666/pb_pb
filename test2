@@ -1,0 +1,39 @@
+import structlog
+import sys
+
+# Common processors chain for both loggers
+common_processors = [
+    structlog.processors.add_log_level,           # add “level”
+    structlog.processors.TimeStamper(fmt="iso"), # add “timestamp”
+    structlog.processors.StackInfoRenderer(),
+    structlog.processors.format_exc_info,
+    structlog.processors.UnicodeDecoder(),
+    structlog.processors.CallsiteParameterAdder({
+        structlog.processors.CallsiteParameter.FILENAME,
+        structlog.processors.CallsiteParameter.FUNC_NAME,
+        structlog.processors.CallsiteParameter.LINENO,
+    }),
+]
+
+# 1. Console logger (pretty output to stdout)
+structlog.configure(
+    processors=common_processors + [
+        structlog.dev.ConsoleRenderer()  # colorful console output
+    ],
+    logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
+)
+console_logger = structlog.get_logger("app.console")
+
+# 2. JSON logger (to file)
+json_file = open("app.json", "a", encoding="utf-8")
+structlog.configure(
+    processors=common_processors + [
+        structlog.processors.JSONRenderer()
+    ],
+    logger_factory=structlog.WriteLoggerFactory(file=json_file),
+)
+json_logger = structlog.get_logger("app.json")
+
+# 3. Logging events (one for console, one for JSON)
+console_logger.info("User login", user="alice", action="login")
+json_logger.info("User login", user="alice", action="login")
