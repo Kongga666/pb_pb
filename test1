@@ -1,0 +1,78 @@
+import logging
+import logging.config
+import structlog
+
+# 1. Configure handlers, formatters, and loggers via dictConfig
+LOGGING_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "console": {
+            "()": structlog.stdlib.ProcessorFormatter,
+            "processor": structlog.dev.ConsoleRenderer(),  # colored console output
+        },
+        "plain_file": {
+            "()": structlog.stdlib.ProcessorFormatter,
+            "processor": structlog.dev.ConsoleRenderer(colors=False),  # plain text, no color
+        },
+        "json_file": {
+            "()": structlog.stdlib.ProcessorFormatter,
+            "processor": structlog.processors.JSONRenderer(),  # JSON output
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "level": "DEBUG",
+            "formatter": "console",
+        },
+        "file_plain": {
+            "class": "logging.FileHandler",
+            "filename": "app.log",
+            "mode": "a",
+            "level": "DEBUG",
+            "formatter": "plain_file",
+        },
+        "file_json": {
+            "class": "logging.FileHandler",
+            "filename": "app.json",
+            "mode": "a",
+            "level": "DEBUG",
+            "formatter": "json_file",
+        },
+    },
+    "root": {
+        "handlers": ["console", "file_plain", "file_json"],
+        "level": "DEBUG",
+    },
+}
+logging.config.dictConfig(LOGGING_CONFIG)
+
+# 2. Configure structlog to feed into the logging system
+structlog.configure(
+    processors=[
+        structlog.stdlib.filter_by_level,                   # respect log level
+        structlog.stdlib.add_logger_name,                   # add “logger” field
+        structlog.stdlib.add_log_level,                     # add “level” field
+        structlog.stdlib.PositionalArgumentsFormatter(),    # %-style formatting
+        structlog.processors.TimeStamper(fmt="iso"),       # add “timestamp”
+        structlog.processors.StackInfoRenderer(),          # add “stack” if needed
+        structlog.processors.format_exc_info,              # add “exception” if exc_info=True
+        structlog.processors.UnicodeDecoder(),            # decode bytes to str
+        structlog.processors.CallsiteParameterAdder({
+            structlog.processors.CallsiteParameter.FILENAME,
+            structlog.processors.CallsiteParameter.FUNC_NAME,
+            structlog.processors.CallsiteParameter.LINENO,
+        }),  # add file, function, and line info
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,  # hand off to logging
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
+# 3. Get a structlog logger and log messages
+logger = structlog.get_logger(__name__)
+logger.debug("This is a DEBUG message", foo=123)
+logger.info("This is an INFO message", answer=42)
+logger.error("An error occurred", exc_info=True)
